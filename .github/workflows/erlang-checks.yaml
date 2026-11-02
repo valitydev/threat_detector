@@ -3,10 +3,10 @@ name: Erlang CI Checks
 on:
   push:
     branches:
-      - 'master'
-      - 'epic/**'
+      - "master"
+      - "epic/**"
   pull_request:
-    branches: ['**']
+    branches: ["**"]
 
 jobs:
   setup:
@@ -18,7 +18,7 @@ jobs:
       thrift-version: ${{ steps.thrift-version.outputs.version }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
       - run: grep -v '^#' .env >> $GITHUB_ENV
       - id: otp-version
         run: echo "::set-output name=version::$OTP_VERSION"
@@ -30,11 +30,12 @@ jobs:
   run:
     name: Run checks
     needs: setup
-    uses: valitydev/erlang-workflows/.github/workflows/erlang-parallel-build.yml@v2
+    uses: valitydev/erlang-workflows/.github/workflows/erlang-parallel-build.yml@v1
     with:
       otp-version: ${{ needs.setup.outputs.otp-version }}
       rebar-version: ${{ needs.setup.outputs.rebar-version }}
       use-thrift: true
       thrift-version: ${{ needs.setup.outputs.thrift-version }}
       run-ct-with-compose: true
+      cache-version: v4
       upload-coverage: false
