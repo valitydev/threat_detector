@@ -1,0 +1,21 @@
+{application, td_server, [
+    {description, "A Thrift service"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {mod, { td_server, [] }},
+    {applications, [
+        kernel,
+        stdlib,
+        genlib,
+        prometheus,
+        prometheus_cowboy,
+        woody,
+        scoper,
+        erl_health,
+        opentelemetry_api,
+        opentelemetry_exporter,
+        opentelemetry
+    ]},
+    {env, []},
+    {licenses, ["Apache 2.0"]}
+]}.

@@ -1,0 +1,82 @@
+---
+title: All transaction search requests
+name: search_request
+logsource:
+  product: paydev_platform
+  category: border_service
+  service: b2b-api
+detection:
+  selection:
+    service.name: b2b-api
+    operation.id: transaction-search
+  condition: selection
+level: informational
+---
+title: Too many transaction search requests by client
+name: too_many_search_requests
+logsource:
+  product: paydev_platform
+  category: border_service
+  service: b2b-api
+correlation:
+  type: event_count
+  rules:
+    - search_request
+  group-by:
+    - subject.id
+  timespan: 3s
+  condition:
+    gte: 15
+level: high
+tags:
+  - cooldown.3s
+---
+title: Unautorized transaction search requests
+name: unauthorize_403
+logsource:
+  product: paydev_platform
+  category: border_service
+  service: b2b-api
+detection:
+  selection:
+    service.name: b2b-api
+    operation.id: transaction-search
+    authorization.result: deny
+  condition: selection
+level: medium
+---
+title: Too many unauthorized transaction search requests by token
+name: too_many_unautohrized_by_token
+logsource:
+  product: paydev_platform
+  category: border_service
+  service: b2b-api
+correlation:
+  type: event_count
+  rules:
+    - unauthorize_403
+  group-by:
+    - subject.id
+    - subject.auth_type
+    - subject.auth_signature
+  timespan: 1m
+  condition:
+    gte: 3
+level: critical
+---
+title: Too many unauthorized transaction search requests by client
+name: too_many_unauthorized_by_client
+logsource:
+  product: paydev_platform
+  category: border_service
+  service: b2b-api
+correlation:
+  type: event_count
+  rules:
+    - unauthorize_403
+  group-by:
+    - subject.id
+  timespan: 5m
+  condition:
+    gte: 10
+level: critical

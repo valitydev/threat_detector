@@ -1,0 +1,56 @@
+---
+title: Any requests
+name: any_request
+detection:
+  selection:
+    service.name: b2b-api
+  condition: selection
+level: informational
+---
+title: Some requests
+name: some_request
+detection:
+  selection:
+    service.name: b2b-api
+  condition: selection
+level: informational
+---
+title: Too many some requests
+name: too_many_some_requests
+correlation:
+  type: event_count
+  rules:
+    - some_request
+    - too_many_many_many_some_requests
+  group_by:
+    - subject.id
+  timespan: 5m
+  condition:
+    gte: 100
+level: critical
+---
+title: Too many-many some requests
+name: too_many_many_some_requests
+correlation:
+  type: event_count
+  rules:
+    - too_many_some_requests
+  group_by:
+    - subject.id
+  timespan: 5m
+  condition:
+    gte: 100
+level: critical
+---
+title: Too many-many-many some requests
+name: too_many_many_many_some_requests
+correlation:
+  type: event_count
+  rules:
+    - too_many_many_some_requests
+  group_by:
+    - subject.id
+  timespan: 5m
+  condition:
+    gte: 100
+level: critical
