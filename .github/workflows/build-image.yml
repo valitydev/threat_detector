@@ -1,0 +1,20 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'epic/**'
+  pull_request:
+    branches: ['**']
+
+jobs:
+  build-image:
+    uses: valitydev/action-deploy-docker/.github/workflows/build-image.yml@v3
+    permissions:
+      contents: read
+      packages: write
+    with:
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-access-token: ${{ secrets.GITHUB_TOKEN }}

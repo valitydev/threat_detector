@@ -1,0 +1,18 @@
+{application, threat_detector, [
+    {description, "An OTP application"},
+    {vsn, "0.1.0"},
+    {registered, []},
+    {mod, {threat_detector_app, []}},
+    {applications, [
+        kernel,
+        stdlib,
+        yamerl,
+        jsx,
+        epg_connector,
+        epg_migrator
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["MIT"]},
+    {links, []}
+ ]}.
