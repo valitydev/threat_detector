@@ -115,7 +115,7 @@ handle_call(_Request, _From, State) ->
 -spec handle_cast(term(), state()) -> {noreply, state()}.
 handle_cast({process_event, {_FromRule, Event}}, State) ->
     %% FromRule is needed for field aliases, not supported yet
-    #state{rule = #{correlation := Correlation}} = State,
+    #state{rule = #{correlation := Correlation}, instances = Instances} = State,
     GroupByFields = maps:get(group_by, Correlation),
     NewState =
         case grouping_key(Event, GroupByFields) of
@@ -123,9 +123,20 @@ handle_cast({process_event, {_FromRule, Event}}, State) ->
                 %% All GroupByFields must be present in Event, otherwise it is ignored
                 State;
             GroupingKey ->
-                Timespan = maps:get(timespan, Correlation),
-                WindowTimers = State#state.window_timers,
-                NewTimers = maybe_start_timer(Timespan * 1000, GroupingKey, window_timer, WindowTimers),
+                %% Start window timer only for 'open' instances (not for 'active')
+                ShouldStartTimer =
+                    case maps:get(GroupingKey, Instances, ?DEFAULT_INSTANCE) of
+                        #{status := open} -> true;
+                        _ -> false
+                    end,
+                NewTimers =
+                    case ShouldStartTimer of
+                        true ->
+                            Timespan = maps:get(timespan, Correlation),
+                            maybe_start_timer(Timespan * 1000, GroupingKey, window_timer, State#state.window_timers);
+                        false ->
+                            State#state.window_timers
+                    end,
                 process_correlation(Event, GroupingKey, State#state{window_timers = NewTimers})
         end,
     {noreply, NewState};
@@ -136,6 +147,7 @@ handle_cast({cancel_threat, GroupingKey}, #state{instances = Instances} = State)
                 ok = delete_threat(maps:get(name, State#state.rule), GroupingKey),
                 State#state{
                     instances = maps:remove(GroupingKey, Instances),
+                    window_timers = maybe_cancel_timer(GroupingKey, State#state.window_timers),
                     cooldown_timers = maybe_cancel_timer(GroupingKey, State#state.cooldown_timers)
                 };
             _ ->
@@ -152,19 +164,22 @@ handle_info({timeout, _TRef, {window_timer, GroupingKey}}, State) ->
         window_timers = WindowTimers,
         instances = Instances
     } = State,
-    Status = instance_status(GroupingKey, Instances),
     NewWindowTimers = maps:remove(GroupingKey, WindowTimers),
     NewState =
-        case Status of
-            open ->
+        case maps:find(GroupingKey, Instances) of
+            {ok, #{status := active}} ->
+                %% Race: instance was activated while timer was in flight
+                logger:warning("window timer fired for active threat in rule ~p, key ~p", [Name, GroupingKey]),
+                State#state{window_timers = NewWindowTimers};
+            {ok, #{status := open}} ->
                 %% the sliding window has closed, the condition has not been met:
                 %% delete instance
                 State#state{
                     instances = maps:remove(GroupingKey, Instances),
                     window_timers = NewWindowTimers
                 };
-            Status when Status =:= active; Status =:= undefined ->
-                logger:error("unknown window timer in rule ~p", [Name]),
+            error ->
+                %% Instance was removed (e.g. by cancel_threat or cooldown) before timer fired
                 State#state{window_timers = NewWindowTimers}
         end,
     {noreply, NewState};
@@ -174,19 +189,23 @@ handle_info({timeout, _TRef, {cooldown_timer, GroupingKey}}, State) ->
         cooldown_timers = CooldownTimers,
         instances = Instances
     } = State,
-    Status = instance_status(GroupingKey, Instances),
     NewCooldownTimers = maps:remove(GroupingKey, CooldownTimers),
     NewState =
-        case Status of
-            active ->
+        case maps:find(GroupingKey, Instances) of
+            {ok, #{status := active}} ->
                 ok = delete_threat(Name, GroupingKey),
-                %% deactivate threat: delete instance
+                %% deactivate threat: delete instance and cancel any remaining window timer
                 State#state{
                     instances = maps:remove(GroupingKey, Instances),
+                    window_timers = maybe_cancel_timer(GroupingKey, State#state.window_timers),
                     cooldown_timers = NewCooldownTimers
                 };
-            Status when Status =:= open; Status =:= undefined ->
-                logger:error("unknown cooldown timer in rule ~p", [Name]),
+            {ok, #{status := open}} ->
+                %% Should not happen: cooldown timer is started only for active threats
+                logger:error("cooldown timer fired for open instance in rule ~p, key ~p", [Name, GroupingKey]),
+                State#state{cooldown_timers = NewCooldownTimers};
+            error ->
+                %% Instance was removed (e.g. by cancel_threat) before timer fired
                 State#state{cooldown_timers = NewCooldownTimers}
         end,
     {noreply, NewState};
@@ -202,10 +221,6 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 %%% Internal functions
-
-%% Crashes if the instance does not exist, as before.
-instance_status(GroupingKey, Instances) ->
-    maps:get(status, maps:get(GroupingKey, Instances, undefined)).
 
 maybe_start_timer(undefined, _GroupingKey, _Type, Timers) ->
     Timers;
