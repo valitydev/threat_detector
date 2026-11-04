@@ -7,7 +7,7 @@
         kernel,
         stdlib,
         genlib,
-        bouncer_proto
+        bouncer_proto,
         prometheus,
         prometheus_cowboy,
         woody,
