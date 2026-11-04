@@ -156,16 +156,16 @@ handle_info({timeout, _TRef, {window_timer, GroupingKey}}, State) ->
     NewWindowTimers = maps:remove(GroupingKey, WindowTimers),
     NewState =
         case Status of
-            active ->
-                logger:error("unknown window timer in rule ~p", [Name]),
-                State#state{window_timers = NewWindowTimers};
             open ->
                 %% the sliding window has closed, the condition has not been met:
                 %% delete instance
                 State#state{
                     instances = maps:remove(GroupingKey, Instances),
                     window_timers = NewWindowTimers
-                }
+                };
+            Status when Status =:= active; Status =:= undefined ->
+                logger:error("unknown window timer in rule ~p", [Name]),
+                State#state{window_timers = NewWindowTimers}
         end,
     {noreply, NewState};
 handle_info({timeout, _TRef, {cooldown_timer, GroupingKey}}, State) ->
@@ -185,7 +185,7 @@ handle_info({timeout, _TRef, {cooldown_timer, GroupingKey}}, State) ->
                     instances = maps:remove(GroupingKey, Instances),
                     cooldown_timers = NewCooldownTimers
                 };
-            open ->
+            Status when Status =:= open; Status =:= undefined ->
                 logger:error("unknown cooldown timer in rule ~p", [Name]),
                 State#state{cooldown_timers = NewCooldownTimers}
         end,
@@ -205,7 +205,7 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Crashes if the instance does not exist, as before.
 instance_status(GroupingKey, Instances) ->
-    maps:get(status, maps:get(GroupingKey, Instances)).
+    maps:get(status, maps:get(GroupingKey, Instances, undefined)).
 
 maybe_start_timer(undefined, _GroupingKey, _Type, Timers) ->
     Timers;
