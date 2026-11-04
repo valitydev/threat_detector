@@ -10,7 +10,9 @@
     rule := binary(),
     level := binary(),
     details := [map()],
-    tags => [term()]
+    tags => [term()],
+    %% RFC 3339 UTC timestamp (2020-03-22T06:12:27Z), present only for threats with a cooldown
+    expires_at => binary()
 }.
 
 -define(DEFAULT_DB_POOL, default_pool).
@@ -25,7 +27,10 @@ process_event(Event) ->
 -spec get_threats(binary()) -> {ok, [threats()]} | {error, term()}.
 get_threats(SubjectId) ->
     SQL =
-        "SELECT rule, level::text, details, tags FROM threats "
+        "SELECT rule, level::text, details, tags, "
+        "to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD') || 'T' || "
+        "to_char(expires_at AT TIME ZONE 'UTC', 'HH24:MI:SS') || 'Z' "
+        "FROM threats "
         "WHERE subject_id = $1 AND (expires_at IS NULL OR expires_at > now())",
     case query(SQL, [SubjectId]) of
         {ok, _Cols, Rows} ->
@@ -51,17 +56,24 @@ query(SQL, Params) ->
     Pool = application:get_env(threat_detector, db_pool, ?DEFAULT_DB_POOL),
     epg_pool:query(Pool, SQL, Params).
 
-to_threat({Rule, Level, Details, Tags}) ->
+to_threat({Rule, Level, Details, Tags, ExpiresAt}) ->
     Threat = #{
         rule => Rule,
         level => Level,
         details => jsx:decode(Details)
     },
-    case jsx:decode(Tags) of
-        [] ->
-            Threat;
-        DecodedTags ->
-            Threat#{tags => DecodedTags}
+    WithTags =
+        case jsx:decode(Tags) of
+            [] ->
+                Threat;
+            DecodedTags ->
+                Threat#{tags => DecodedTags}
+        end,
+    case ExpiresAt of
+        null ->
+            WithTags;
+        _ ->
+            WithTags#{expires_at => ExpiresAt}
     end.
 
 cancel_threat({Rule, Details}) ->
