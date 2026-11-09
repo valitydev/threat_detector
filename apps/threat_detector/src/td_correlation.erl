@@ -144,7 +144,9 @@ handle_cast({cancel_threat, GroupingKey}, #state{instances = Instances} = State)
     NewState =
         case maps:get(GroupingKey, Instances, #{}) of
             #{status := active} ->
-                ok = delete_threat(maps:get(name, State#state.rule), GroupingKey),
+                Name = maps:get(name, State#state.rule),
+                logger:info("[audit] Cancel threat ~p for ~p", [Name, GroupingKey]),
+                ok = delete_threat(Name, GroupingKey),
                 State#state{
                     instances = maps:remove(GroupingKey, Instances),
                     window_timers = maybe_cancel_timer(GroupingKey, State#state.window_timers),
@@ -193,6 +195,7 @@ handle_info({timeout, _TRef, {cooldown_timer, GroupingKey}}, State) ->
     NewState =
         case maps:find(GroupingKey, Instances) of
             {ok, #{status := active}} ->
+                logger:info("[audit] Cancel threat ~p for ~p by timeout", [Name, GroupingKey]),
                 ok = delete_threat(Name, GroupingKey),
                 %% deactivate threat: delete instance and cancel any remaining window timer
                 State#state{
@@ -279,6 +282,11 @@ activate_threat(GroupingKey, Instance, Aggregate, State) ->
     Level = maps:get(level, Rule, <<"low">>),
     Tags = maps:get(tags, Rule, []),
     ok = persist_threat(RuleName, Level, GroupingKey, Tags, Timeout),
+    logger:info(
+        "[audit] Threat detected. Rule: ~p, Level: ~p, Instance: ~p, Tags: ~p",
+        [RuleName, Level, GroupingKey, Tags]
+    ),
+    _ = prometheus_counter:inc(threats_detection_counter, [RuleName]),
     State#state{
         instances = Instances#{GroupingKey => NewInstance},
         window_timers = maybe_cancel_timer(GroupingKey, WindowTimers),
@@ -307,6 +315,7 @@ restore_row(RuleName, {DetailsJson, ExpiresAt}, State) ->
             case RemainingMs =< 0 of
                 true ->
                     %% expired while the process was down: clean up
+                    logger:info("[audit] Cancel threat ~p for ~p by timeout", [RuleName, GroupingKey]),
                     ok = delete_threat(RuleName, GroupingKey),
                     State;
                 false ->
