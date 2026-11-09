@@ -70,6 +70,10 @@ get_threats_excludes_expired_cooldown(_Config) ->
     {ok, [Threat]} = threat_detector:get_threats(SubjectId),
     ?assertEqual(<<"c_cooldown">>, maps:get(rule, Threat)),
     ?assertEqual([<<"cooldown.2s">>], maps:get(tags, Threat)),
+    %% a rule with a cooldown exposes the expiration time as an RFC 3339 UTC timestamp
+    ExpiresAt = maps:get(expires_at, Threat),
+    ?assertMatch(<<_:4/binary, "-", _:2/binary, "-", _:2/binary, "T", _:8/binary, "Z">>, ExpiresAt),
+    _ = calendar:rfc3339_to_system_time(binary_to_list(ExpiresAt)),
     %% the cooldown (2s) fires: the instance and its DB row are removed
     td_ct:await_threat(c_cooldown, Key, undefined, 4000),
     ?assertEqual({ok, []}, threat_detector:get_threats(SubjectId)).

@@ -21,6 +21,7 @@
     cancel_threat_removes_active/1,
     cancel_threat_unknown_group_noop/1,
     cancel_threat_on_open_instance_noop/1,
+    cancel_threat_after_extra_event_keeps_process_alive/1,
     condition_gt/1,
     condition_lte/1,
     condition_eq/1,
@@ -52,6 +53,7 @@ all() ->
         cancel_threat_removes_active,
         cancel_threat_unknown_group_noop,
         cancel_threat_on_open_instance_noop,
+        cancel_threat_after_extra_event_keeps_process_alive,
         condition_gt,
         condition_lte,
         condition_eq,
@@ -225,6 +227,24 @@ cancel_threat_on_open_instance_noop(_Config) ->
     ok = td_correlation:cancel_threat(c_cooldown, Key),
     timer:sleep(?SETTLE_MS),
     ?assertEqual(#{status => open, aggregate => 1}, td_correlation:get_threat(c_cooldown, Key)).
+
+%% Regression: in prod a window timer fired for an instance removed by cancel_threat
+%% and crashed the correlator. c_window: gte 3 within 1s, no cooldown.
+-spec cancel_threat_after_extra_event_keeps_process_alive(ct_suite:ct_config()) -> ok.
+cancel_threat_after_extra_event_keeps_process_alive(_Config) ->
+    Key = key(<<"user1">>),
+    produce(search_event(<<"user1">>), 3),
+    await_threat(c_window, Key, #{status => active, aggregate => 3}),
+    %% an event for an already active threat must not leave a window timer behind
+    produce(search_event(<<"user1">>), 1),
+    timer:sleep(?SETTLE_MS),
+    Pid = whereis(c_window),
+    ok = td_correlation:cancel_threat(c_window, Key),
+    await_threat(c_window, Key, undefined, 1000),
+    %% wait longer than the window (1s): a stale window timer would crash the process
+    timer:sleep(1500),
+    ?assertEqual(Pid, whereis(c_window)),
+    ?assertEqual(undefined, td_correlation:get_threat(c_window, Key)).
 
 %%% Condition operators
 

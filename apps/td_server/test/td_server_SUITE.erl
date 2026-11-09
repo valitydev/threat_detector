@@ -101,7 +101,9 @@ get_context_returns_active_threats(Config) ->
     ),
     %% event_details must contain subject.id
     EventDetails = Threat#'ctx_v1_Threat'.event_details,
-    ?assertMatch(#{?SUBJ := {string_value, SubjectId}}, EventDetails).
+    ?assertMatch(#{?SUBJ := {string_value, SubjectId}}, EventDetails),
+    %% a rule without a cooldown has no expiration
+    ?assertEqual(undefined, Threat#'ctx_v1_Threat'.expiration).
 
 %% After cooldown fires, GetContext must return an empty fragment.
 %% c_cooldown: gte 2 events on export, cooldown.2s.
@@ -115,7 +117,11 @@ get_context_excludes_expired_cooldown(Config) ->
     %% threat is visible immediately after activation
     ThreatCtx = td_thrift_client:get_context(SubjectId, Client),
     Fragment1 = deserialize_context(ThreatCtx),
-    ?assertEqual(1, ordsets:size(get_threats_from_fragment(Fragment1))),
+    [Threat1] = ordsets:to_list(get_threats_from_fragment(Fragment1)),
+    %% a rule with a cooldown carries the expiration as an RFC 3339 UTC timestamp
+    Expiration = Threat1#'ctx_v1_Threat'.expiration,
+    ?assertMatch(<<_:4/binary, "-", _:2/binary, "-", _:2/binary, "T", _:8/binary, "Z">>, Expiration),
+    _ = calendar:rfc3339_to_system_time(binary_to_list(Expiration)),
     %% wait for the 2s cooldown to expire and the DB row to be deleted
     td_ct:await_threat(c_cooldown, td_ct:key(SubjectId), undefined, 4000),
     ThreatCtx2 = td_thrift_client:get_context(SubjectId, Client),

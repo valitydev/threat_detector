@@ -70,12 +70,14 @@ setup_testcase(TestCase, Config) ->
     Path = filename:join(proplists:get_value(priv_dir, Config), "rules.yaml"),
     ok = file:write_file(Path, rules_for(TestCase)),
     ok = application:set_env(threat_detector, config_path, Path),
+    ok = application:set_env(threat_detector, database, threat_detector),
     Config.
 
 -spec teardown_testcase() -> ok.
 teardown_testcase() ->
     _ = application:stop(threat_detector),
     ok = application:unset_env(threat_detector, config_path),
+    ok = application:unset_env(threat_detector, database),
     ok = clear_all_threats(),
     ok.
 
@@ -187,6 +189,15 @@ count_threats(Pool, Rule, Key) ->
 %%% Rule configs (minimal time granularity is one second)
 
 -spec rules_for(atom()) -> binary().
+rules_for(multi_correlation_activate) ->
+    iolist_to_binary([
+        det("all", [{"op.service", "b2b"}, {"op.id", "get"}]),
+        det("unknown", [{"op.service", "b2b"}, {"op.id", "get"}, {"op.result", "not_found"}]),
+        det("unauth", [{"op.service", "b2b"}, {"op.id", "get"}, {"op.result", "auth_fail"}]),
+        corr("too_many_all", "all", ["subject.id"], "1s", {"gte", 10}, ["cooldown.3s"]),
+        corr("too_many_unknown", "unknown", ["subject.id"], "1s", {"gte", 3}, ["brutforce.transaction"]),
+        corr("too_many_unauth", "unauth", ["subject.id"], "1s", {"gte", 3}, ["brutforce.merchant"])
+    ]);
 rules_for(start_fails_on_cycle) ->
     iolist_to_binary([
         corr("c1", "c2", ["subject.id"], "1s", {"gte", 1}, []),

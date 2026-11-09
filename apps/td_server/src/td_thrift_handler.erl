@@ -58,7 +58,8 @@ encode(threat, Threat) ->
         name = RuleName,
         level = encode(level, Level),
         event_details = encode(details, Details),
-        tags = maps:get(tags, Threat, undefined)
+        tags = maps:get(tags, Threat, undefined),
+        expiration = maps:get(expires_at, Threat, undefined)
     };
 encode(level, <<"critical">>) ->
     critical;

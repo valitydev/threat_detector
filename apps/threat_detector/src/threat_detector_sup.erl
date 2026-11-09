@@ -37,7 +37,7 @@ init([]) ->
 %% internal functions
 
 db_init() ->
-    DbRef = application:get_env(threat_detector, database, threat_detector),
+    DbRef = application:get_env(threat_detector, database, 'threat-detector'),
     {ok, Databases} = application:get_env(epg_connector, databases),
     DbOpts = maps:get(DbRef, Databases),
     PrivDir = code:priv_dir(threat_detector),

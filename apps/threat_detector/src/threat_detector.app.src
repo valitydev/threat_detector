@@ -9,7 +9,8 @@
         yamerl,
         jsx,
         epg_connector,
-        epg_migrator
+        epg_migrator,
+        prometheus
     ]},
     {env, []},
     {modules, []},

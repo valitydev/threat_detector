@@ -3,7 +3,7 @@
  {<<"acceptor_pool">>,{pkg,<<"acceptor_pool">>,<<"1.0.1">>},2},
  {<<"bouncer_proto">>,
   {git,"https://github.com/valitydev/bouncer-proto.git",
-       {ref,"6de4349863250f352e7c687b96451cde7f74a782"}},
+       {ref,"fbaff3528a57253f65ae1a266e4eb825eeda0733"}},
   0},
  {<<"cache">>,{pkg,<<"cache">>,<<"2.3.3">>},1},
  {<<"canal">>,
