@@ -70,12 +70,14 @@ setup_testcase(TestCase, Config) ->
     Path = filename:join(proplists:get_value(priv_dir, Config), "rules.yaml"),
     ok = file:write_file(Path, rules_for(TestCase)),
     ok = application:set_env(threat_detector, config_path, Path),
+    ok = application:set_env(threat_detector, database, threat_detector),
     Config.
 
 -spec teardown_testcase() -> ok.
 teardown_testcase() ->
     _ = application:stop(threat_detector),
     ok = application:unset_env(threat_detector, config_path),
+    ok = application:unset_env(threat_detector, database),
     ok = clear_all_threats(),
     ok.
 
